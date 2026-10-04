@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="آزمون حافظه اتوبیوگرافیک (AMT)", layout="centered")
 
 # -------------------------------------------------------------------
-# استایل راست‌‌چین (RTL) و فونت بزرگ برای کلمه (دقیقاً همان ظاهر اولیه شما)
+# استایل راست‌‌چین (RTL) و فونت بزرگ برای کلمه
 # -------------------------------------------------------------------
 st.markdown("""
     <style>
@@ -81,14 +81,14 @@ def save_data(data_dict):
     file_exists = os.path.isfile(AMT_FILE)
     df_new.to_csv(AMT_FILE, mode='a' if file_exists else 'w', header=not file_exists, index=False, encoding='utf-8-sig')
 
-    # ۲. ذخیره آنلاین در Google Sheets (در صورت تنظیم بودن Secrets)
+    # ۲. ذخیره آنلاین در Google Sheets
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         existing_data = conn.read(ttl=0)
         updated_df = pd.concat([existing_data, df_new], ignore_index=True)
         conn.update(data=updated_df)
-    except Exception:
-        pass
+    except Exception as e:
+        st.error(f"⚠️ خطای اتصال/ذخیره در گوگل شیت: {e}")
 
 if 'page' not in st.session_state:
     st.session_state.page = 'intro'
@@ -225,7 +225,7 @@ elif st.session_state.page == 'amt_task':
                 st.markdown('<div class="hidden-word-box">🙈 کلمه ناپدید شد! خاطره خود را تایپ کنید.</div>', unsafe_allow_html=True)
                 st.warning(f"✍️ **زمان باقی‌مانده جهت تایپ خاطره:** {rem_type} ثانیه")
 
-                # باکس متنی بدون st.form جهت جلوگیری از پاک شدن متن حین رفرش تایمر
+                # باکس متنی مستقیم
                 memory_text = st.text_area(
                     "خاطره خود را تایپ کنید:",
                     value=st.session_state.typed_memory_text,
@@ -257,7 +257,7 @@ elif st.session_state.page == 'amt_task':
                     st.session_state.phase_start_time = time.time()
                     st.rerun()
             else:
-                # اتمام زمان تایپ (۶۰ ثانیه) - متن تایپ‌شده تا این لحظه حفظ و ذخیره می‌شود
+                # اتمام زمان تایپ (۶۰ ثانیه) - حفظ متن تایپ‌شده تا لحظه آخر
                 current_text = st.session_state.get(f"amt_text_{current_idx}", st.session_state.typed_memory_text)
                 final_text = current_text.strip() if current_text.strip() else "نیمه‌کاره (اتمام ۶۰ ثانیه تایپ)"
                 
