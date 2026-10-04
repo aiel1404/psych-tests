@@ -9,7 +9,40 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="آزمون حافظه اتوبیوگرافیک (AMT)", layout="centered")
 
 # -------------------------------------------------------------------
-# استایل راست‌‌چین (RTL) و فونت بزرگ برای کلمه
+# مقداردهی اولیه Session State (حتماً قبل از هرگونه منطق اجرایی)
+# -------------------------------------------------------------------
+if 'page' not in st.session_state:
+    st.session_state.page = 'intro'
+
+if 'subject_id' not in st.session_state:
+    st.session_state.subject_id = ""
+
+if 'amt_words' not in st.session_state:
+    pos_words = [("مثبت", w) for w in ["شاد", "موفق", "امیدوار", "آرام", "دوست داشتنی", "افتخار"]]
+    neg_words = [("منفی", w) for w in ["غمگین", "شکست", "تنها", "نا امید", "بی ارزش", "خسته"]]
+    neu_words = [("خنثی", w) for w in ["میز", "صندلی", "لیوان", "دیوار", "خودکار", "نیمکت"]]
+    
+    all_words = pos_words + neg_words + neu_words
+    random.shuffle(all_words)
+    st.session_state.amt_words = all_words
+
+if 'word_index' not in st.session_state:
+    st.session_state.word_index = 0
+
+if 'phase' not in st.session_state:
+    st.session_state.phase = 'viewing'  # دو حالت: 'viewing' یا 'typing'
+
+if 'phase_start_time' not in st.session_state:
+    st.session_state.phase_start_time = None
+
+if 'view_duration' not in st.session_state:
+    st.session_state.view_duration = 0.0
+
+if 'typed_memory_text' not in st.session_state:
+    st.session_state.typed_memory_text = ""
+
+# -------------------------------------------------------------------
+# استایل راست‌‌‌‌چین (RTL) و فونت بزرگ برای کلمه
 # -------------------------------------------------------------------
 st.markdown("""
     <style>
@@ -25,7 +58,6 @@ st.markdown("""
         direction: rtl !important;
         text-align: right !important;
     }
-    /* باکس نمایش کلمه با اندازه فونت بسیار بزرگ */
     .word-box {
         background-color: #f0f4f8;
         border-radius: 16px;
@@ -74,6 +106,8 @@ AMT_FILE = "amt_responses.csv"
 MAX_VIEW_TIME = 30  # حداکثر زمان یادآوری کلمه (۳۰ ثانیه)
 TYPE_TIME = 60      # زمان تایپ پس از ناپدید شدن (۶۰ ثانیه)
 
+# ⚠️ لینک گوگل شیت خود را دقیقاً جایگزین عبارت زیر کنید
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/17HljjfRO7xfaWMWkiPwsAoEMJhdhVd1xZB0mFrzh9Ww/edit?usp=sharing"
 def save_data(data_dict):
     """ذخیره همزمان در فایل محلی CSV و Google Sheets"""
     # ۱. ذخیره محلی در CSV
@@ -83,41 +117,12 @@ def save_data(data_dict):
 
     # ۲. ذخیره آنلاین در Google Sheets
     try:
-        # لینک فایل گوگل شیت خودت را جایگزین لینک زیر کن
-        sheet_url = "https://docs.google.com/spreadsheets/d/17HljjfRO7xfaWMWkiPwsAoEMJhdhVd1xZB0mFrzh9Ww/edit?usp=sharing"
-        
         conn = st.connection("gsheets", type=GSheetsConnection)
-        existing_data = conn.read(spreadsheet=sheet_url, ttl=0)
+        existing_data = conn.read(spreadsheet=GOOGLE_SHEET_URL, ttl=0)
         updated_df = pd.concat([existing_data, df_new], ignore_index=True)
-        conn.update(spreadsheet=sheet_url, data=updated_df)
+        conn.update(spreadsheet=GOOGLE_SHEET_URL, data=updated_df)
     except Exception as e:
         st.error(f"⚠️ خطای اتصال/ذخیره در گوگل شیت: {e}")
-# -------------------------------------------------------------------
-# کلمات آزمون
-# -------------------------------------------------------------------
-if 'amt_words' not in st.session_state:
-    pos_words = [("مثبت", w) for w in ["شاد", "موفق", "امیدوار", "آرام", "دوست داشتنی", "افتخار"]]
-    neg_words = [("منفی", w) for w in ["غمگین", "شکست", "تنها", "نا امید", "بی ارزش", "خسته"]]
-    neu_words = [("خنثی", w) for w in ["میز", "صندلی", "لیوان", "دیوار", "خودکار", "نیمکت"]]
-    
-    all_words = pos_words + neg_words + neu_words
-    random.shuffle(all_words)
-    st.session_state.amt_words = all_words
-
-if 'word_index' not in st.session_state:
-    st.session_state.word_index = 0
-
-if 'phase' not in st.session_state:
-    st.session_state.phase = 'viewing'  # دو حالت: 'viewing' یا 'typing'
-
-if 'phase_start_time' not in st.session_state:
-    st.session_state.phase_start_time = None
-
-if 'view_duration' not in st.session_state:
-    st.session_state.view_duration = 0.0
-
-if 'typed_memory_text' not in st.session_state:
-    st.session_state.typed_memory_text = ""
 
 # ===================================================================
 # بخش ۱: راهنمای آزمون
@@ -193,7 +198,6 @@ elif st.session_state.page == 'amt_task':
                     st.session_state.typed_memory_text = ""
                     st.rerun()
             else:
-                # اگر ۳۰ ثانیه تمام شد و دکمه را نزد
                 record = {
                     "Subject_ID": st.session_state.subject_id,
                     "Word_Index": current_idx + 1,
@@ -221,7 +225,6 @@ elif st.session_state.page == 'amt_task':
                 st.markdown('<div class="hidden-word-box">🙈 کلمه ناپدید شد! خاطره خود را تایپ کنید.</div>', unsafe_allow_html=True)
                 st.warning(f"✍️ **زمان باقی‌مانده جهت تایپ خاطره:** {rem_type} ثانیه")
 
-                # باکس متنی مستقیم
                 memory_text = st.text_area(
                     "خاطره خود را تایپ کنید:",
                     value=st.session_state.typed_memory_text,
@@ -246,14 +249,12 @@ elif st.session_state.page == 'amt_task':
                     }
                     save_data(record)
 
-                    # آماده‌سازی برای کلمه بعدی
                     st.session_state.typed_memory_text = ""
                     st.session_state.word_index += 1
                     st.session_state.phase = 'viewing'
                     st.session_state.phase_start_time = time.time()
                     st.rerun()
             else:
-                # اتمام زمان تایپ (۶۰ ثانیه) - حفظ متن تایپ‌شده تا لحظه آخر
                 current_text = st.session_state.get(f"amt_text_{current_idx}", st.session_state.typed_memory_text)
                 final_text = current_text.strip() if current_text.strip() else "نیمه‌کاره (اتمام ۶۰ ثانیه تایپ)"
                 
