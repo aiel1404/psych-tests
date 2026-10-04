@@ -107,7 +107,6 @@ MAX_VIEW_TIME = 30  # حداکثر زمان یادآوری کلمه (۳۰ ثان
 TYPE_TIME = 60      # زمان تایپ پس از ناپدید شدن (۶۰ ثانیه)
 
 # ⚠️ لینک گوگل شیت خود را دقیقاً جایگزین عبارت زیر کنید
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/17HljjfRO7xfaWMWkiPwsAoEMJhdhVd1xZB0mFrzh9Ww/edit?usp=sharing"
 def save_data(data_dict):
     """ذخیره همزمان در فایل محلی CSV و Google Sheets"""
     # ۱. ذخیره محلی در CSV
@@ -118,9 +117,9 @@ def save_data(data_dict):
     # ۲. ذخیره آنلاین در Google Sheets
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
-        existing_data = conn.read(spreadsheet=GOOGLE_SHEET_URL, ttl=0)
+        existing_data = conn.read(ttl=0)
         updated_df = pd.concat([existing_data, df_new], ignore_index=True)
-        conn.update(spreadsheet=GOOGLE_SHEET_URL, data=updated_df)
+        conn.update(data=updated_df)
     except Exception as e:
         st.error(f"⚠️ خطای اتصال/ذخیره در گوگل شیت: {e}")
 
