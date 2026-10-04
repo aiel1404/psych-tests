@@ -1,0 +1,5 @@
+my_psych_project/
+│
+├── amt_app.py        <-- کدهای آزمون AMT متصل به گوگل شیت
+├── bdi_app.py        <-- کدهای پرسشنامه BDI متصل به گوگل شیت
+└── requirements.txt  <-- نیازمندی‌های پروژه
