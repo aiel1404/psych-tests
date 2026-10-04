@@ -83,19 +83,15 @@ def save_data(data_dict):
 
     # ۲. ذخیره آنلاین در Google Sheets
     try:
+        # لینک فایل گوگل شیت خودت را جایگزین لینک زیر کن
+        sheet_url = "https://docs.google.com/spreadsheets/d/17HljjfRO7xfaWMWkiPwsAoEMJhdhVd1xZB0mFrzh9Ww/edit?usp=sharing"
+        
         conn = st.connection("gsheets", type=GSheetsConnection)
-        existing_data = conn.read(ttl=0)
+        existing_data = conn.read(spreadsheet=sheet_url, ttl=0)
         updated_df = pd.concat([existing_data, df_new], ignore_index=True)
-        conn.update(data=updated_df)
+        conn.update(spreadsheet=sheet_url, data=updated_df)
     except Exception as e:
         st.error(f"⚠️ خطای اتصال/ذخیره در گوگل شیت: {e}")
-
-if 'page' not in st.session_state:
-    st.session_state.page = 'intro'
-
-if 'subject_id' not in st.session_state:
-    st.session_state.subject_id = ""
-
 # -------------------------------------------------------------------
 # کلمات آزمون
 # -------------------------------------------------------------------
