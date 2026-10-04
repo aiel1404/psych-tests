@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="آزمون حافظه اتوبیوگرافیک (AMT)", layout="centered")
 
 # -------------------------------------------------------------------
-# مقداردهی اولیه Session State (حتماً قبل از هرگونه منطق اجرایی)
+# مقداردهی اولیه Session State
 # -------------------------------------------------------------------
 if 'page' not in st.session_state:
     st.session_state.page = 'intro'
@@ -30,7 +30,7 @@ if 'word_index' not in st.session_state:
     st.session_state.word_index = 0
 
 if 'phase' not in st.session_state:
-    st.session_state.phase = 'viewing'  # دو حالت: 'viewing' یا 'typing'
+    st.session_state.phase = 'viewing'
 
 if 'phase_start_time' not in st.session_state:
     st.session_state.phase_start_time = None
@@ -41,8 +41,12 @@ if 'view_duration' not in st.session_state:
 if 'typed_memory_text' not in st.session_state:
     st.session_state.typed_memory_text = ""
 
+# لیست جهت ذخیره موقت پاسخ‌های آزمون در حافظه
+if 'all_responses' not in st.session_state:
+    st.session_state.all_responses = []
+
 # -------------------------------------------------------------------
-# استایل راست‌‌‌‌چین (RTL) و فونت بزرگ برای کلمه
+# استایل راست‌چین (RTL)
 # -------------------------------------------------------------------
 st.markdown("""
     <style>
@@ -106,22 +110,28 @@ AMT_FILE = "amt_responses.csv"
 MAX_VIEW_TIME = 30  # حداکثر زمان یادآوری کلمه (۳۰ ثانیه)
 TYPE_TIME = 60      # زمان تایپ پس از ناپدید شدن (۶۰ ثانیه)
 
-def save_data(data_dict):
-    """ذخیره همزمان در فایل محلی CSV و Google Sheets"""
-    # ۱. ذخیره محلی در CSV
+def save_single_record_locally(data_dict):
+    """ذخیره لحظه‌ای پاسخ در فایل CSV سرور جهت پشتیبان‌گیری"""
     df_new = pd.DataFrame([data_dict])
     file_exists = os.path.isfile(AMT_FILE)
     df_new.to_csv(AMT_FILE, mode='a' if file_exists else 'w', header=not file_exists, index=False, encoding='utf-8-sig')
 
-    # ۲. ذخیره آنلاین در Google Sheets
+def sync_all_data_to_gsheets():
+    """ارسال یک‌باره کل داده‌های ثبت‌شده در انتهای آزمون به Google Sheets"""
+    if not st.session_state.all_responses:
+        return True
+    
     try:
-        # اتصال خودکار از طریق Environment Variables تعریف شده در Render
+        df_all = pd.DataFrame(st.session_state.all_responses)
         conn = st.connection("gsheets", type=GSheetsConnection)
         existing_data = conn.read(ttl=0)
-        updated_df = pd.concat([existing_data, df_new], ignore_index=True)
+        updated_df = pd.concat([existing_data, df_all], ignore_index=True)
         conn.update(data=updated_df)
+        return True
     except Exception as e:
-        st.error(f"⚠️ خطای اتصال/ذخیره در گوگل شیت: {e}")
+        st.error(f"⚠️ خطای اتصال/ذخیره نهایی در گوگل شیت: {e}")
+        return False
+
 # ===================================================================
 # بخش ۱: راهنمای آزمون
 # ===================================================================
@@ -207,7 +217,8 @@ elif st.session_state.page == 'amt_task':
                     "Total_Time_Sec": MAX_VIEW_TIME,
                     "Time_Out": True
                 }
-                save_data(record)
+                st.session_state.all_responses.append(record)
+                save_single_record_locally(record)
 
                 st.session_state.word_index += 1
                 st.session_state.phase = 'viewing'
@@ -245,7 +256,8 @@ elif st.session_state.page == 'amt_task':
                         "Total_Time_Sec": round(st.session_state.view_duration + typing_time, 2),
                         "Time_Out": False
                     }
-                    save_data(record)
+                    st.session_state.all_responses.append(record)
+                    save_single_record_locally(record)
 
                     st.session_state.typed_memory_text = ""
                     st.session_state.word_index += 1
@@ -267,7 +279,8 @@ elif st.session_state.page == 'amt_task':
                     "Total_Time_Sec": round(st.session_state.view_duration + TYPE_TIME, 2),
                     "Time_Out": True
                 }
-                save_data(record)
+                st.session_state.all_responses.append(record)
+                save_single_record_locally(record)
 
                 st.session_state.typed_memory_text = ""
                 st.session_state.word_index += 1
@@ -287,6 +300,14 @@ elif st.session_state.page == 'amt_task':
 # ===================================================================
 elif st.session_state.page == 'thank_you':
     st.header("پایان آزمون")
-    st.balloons()
-    st.success("پاسخ‌ها و زمان‌های ثبت خاطرات شما با موفقیت ذخیره شد.")
-    st.write(f"فایل نتایج در مسیر برنامه با نام **`{AMT_FILE}`** ایجاد شد.")
+    
+    with st.spinner("در حال ثبت و همگام‌سازی نهایی اطلاعات در گوگل شیت..."):
+        success = sync_all_data_to_gsheets()
+    
+    if success:
+        st.balloons()
+        st.success("پاسخ‌ها و زمان‌های ثبت خاطرات شما با موفقیت در گوگل شیت ذخیره شد.")
+    else:
+        st.warning("پاسخ‌ها به صورت محلی ثبت شدند اما در همگام‌سازی گوگل شیت مشکلی پیش آمد.")
+        
+    st.write(f"فایل نتایج در مسیر برنامه با نام **`{AMT_FILE}`** نیز ذخیره شد.")
