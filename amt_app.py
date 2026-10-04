@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
-from st_gsheets_connection import GSheetsConnection
+from streamlit_gsheets import GSheetsConnection
 
 # ==========================================
 # 1. تنظیمات اولیه صفحه
