@@ -106,7 +106,6 @@ AMT_FILE = "amt_responses.csv"
 MAX_VIEW_TIME = 30  # حداکثر زمان یادآوری کلمه (۳۰ ثانیه)
 TYPE_TIME = 60      # زمان تایپ پس از ناپدید شدن (۶۰ ثانیه)
 
-# ⚠️ لینک گوگل شیت خود را دقیقاً جایگزین عبارت زیر کنید
 def save_data(data_dict):
     """ذخیره همزمان در فایل محلی CSV و Google Sheets"""
     # ۱. ذخیره محلی در CSV
@@ -116,13 +115,13 @@ def save_data(data_dict):
 
     # ۲. ذخیره آنلاین در Google Sheets
     try:
+        # اتصال خودکار از طریق Environment Variables تعریف شده در Render
         conn = st.connection("gsheets", type=GSheetsConnection)
         existing_data = conn.read(ttl=0)
         updated_df = pd.concat([existing_data, df_new], ignore_index=True)
         conn.update(data=updated_df)
     except Exception as e:
         st.error(f"⚠️ خطای اتصال/ذخیره در گوگل شیت: {e}")
-
 # ===================================================================
 # بخش ۱: راهنمای آزمون
 # ===================================================================
