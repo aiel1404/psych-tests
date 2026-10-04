@@ -1,255 +1,104 @@
 import streamlit as st
 import pandas as pd
-import random
-import time
 from streamlit_gsheets import GSheetsConnection
+import time
 
-# تنظیمات صفحه
-st.set_page_config(page_title="آزمون حافظه اتوبیوگرافیک (AMT)", layout="centered")
+# ۱. تنظیمات اولیه صفحه
+st.set_page_config(page_title="آزمون AMT", page_icon="🧠", layout="centered")
 
-# استایل راست‌چین و فونت بزرگ کلمات
-st.markdown("""
-    <style>
-    html, body, [data-testid="stAppViewContainer"], div[data-testid="stMarkdownContainer"] {
-        direction: rtl;
-        text-align: right;
-    }
-    input, textarea, label {
-        direction: rtl !important;
-        text-align: right !important;
-    }
-    .word-box {
-        background-color: #f0f4f8;
-        border-radius: 16px;
-        padding: 40px 20px;
-        text-align: center;
-        font-size: 65px;
-        font-weight: 900;
-        color: #0d47a1;
-        margin-top: 15px;
-        margin-bottom: 25px;
-        border: 3px solid #90caf9;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    }
-    .hidden-word-box {
-        background-color: #fff8e1;
-        border-radius: 16px;
-        padding: 30px 20px;
-        text-align: center;
-        font-size: 24px;
-        font-weight: bold;
-        color: #f57f17;
-        margin-top: 15px;
-        margin-bottom: 25px;
-        border: 2px dashed #ffe082;
-    }
-    .instruction-card {
-        background-color: #f9f9f9;
-        border: 1px solid #e0e0e0;
-        border-right: 5px solid #1f77b4;
-        padding: 20px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        line-height: 1.8;
-    }
-    .example-card {
-        background-color: #e8f4f8;
-        border-radius: 6px;
-        padding: 12px 15px;
-        margin-top: 10px;
-        font-size: 15px;
-    }
-    </style>
-""", unsafe_allow_html=True)
+st.title("آزمون حافظه سرگذشتی (AMT)")
+st.write("لطفاً پس از مشاهده کلمه محرک، خاطره خود را تایپ کنید. شما ۶۰ ثانیه زمان دارید.")
 
-# اتصال به گوگل شیت
+# ۲. راه‌اندازی اتصال به گوگل شیت
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-MAX_VIEW_TIME = 30
-TYPE_TIME = 60
-
-def save_amt_gsheet(data_dict):
+# ۳. تابع ذخیره‌سازی داده در گوگل شیت
+def save_amt_gsheet(record_dict):
     try:
-        # خواندن داده‌های فعلی
+        # خواندن داده‌های فعلی از تب AMT_Data
         existing_data = conn.read(worksheet="AMT_Data", ttl=0)
-        updated_df = pd.concat([existing_data, pd.DataFrame([data_dict])], ignore_index=True)
-        # به روزرسانی شیت
-        conn.update(worksheet="AMT_Data", data=updated_df)
+        df_existing = pd.DataFrame(existing_data)
     except Exception:
-        # در صورت خالی بودن شیت در بار اول
-        df_new = pd.DataFrame([data_dict])
-        conn.update(worksheet="AMT_Data", data=df_new)
+        df_existing = pd.DataFrame()
 
-if 'page' not in st.session_state:
-    st.session_state.page = 'intro'
-
-if 'subject_id' not in st.session_state:
-    st.session_state.subject_id = ""
-
-if 'amt_words' not in st.session_state:
-    pos_words = [("مثبت", w) for w in ["شاد", "موفق", "امیدوار", "آرام", "دوست داشتنی", "افتخار"]]
-    neg_words = [("منفی", w) for w in ["غمگین", "شکست", "تنها", "نا امید", "بی ارزش", "خسته"]]
-    neu_words = [("خنثی", w) for w in ["میز", "صندلی", "لیوان", "دیوار", "خودکار", "نیمکت"]]
-    all_words = pos_words + neg_words + neu_words
-    random.shuffle(all_words)
-    st.session_state.amt_words = all_words
-
-if 'word_index' not in st.session_state:
-    st.session_state.word_index = 0
-
-if 'phase' not in st.session_state:
-    st.session_state.phase = 'viewing'
-
-if 'phase_start_time' not in st.session_state:
-    st.session_state.phase_start_time = None
-
-if 'view_duration' not in st.session_state:
-    st.session_state.view_duration = 0.0
-
-# -------------------------------------------------------------------
-# بخش ۱: راهنمای آزمون
-# -------------------------------------------------------------------
-if st.session_state.page == 'intro':
-    st.title("آزمون حافظه اتوبیوگرافیک (AMT)")
+    # تبدیل داده جدید به دیتافریم
+    df_new_row = pd.DataFrame([record_dict])
     
-    st.markdown("""
-    <div class="instruction-card">
-        <h3>دستورالعمل آزمون:</h3>
-        <p>در این آزمون ما می‌خواهیم بدانیم شما تا چه اندازه می‌توانید <b>خاطرات خاص زندگی خود</b> را به یاد آورید.</p>
-        <p>منظور از خاطره، اتفاقی است که در <b>زمان و مکان خاصی</b> اتفاق افتاده و <b>یک روز یا کمتر از یک روز</b> طول کشیده است.</p>
-        <ul>
-            <li>این خاطره می‌تواند مربوط به <b>روزهای اخیر یا زمان‌های گذشته</b> باشد.</li>
-            <li>این خاطره می‌تواند یک اتفاق <b>مهم یا کاملاً عادی</b> در زندگی باشد.</li>
-            <li>برای هر لغت باید <b>فقط یک خاطره</b> تعریف کنید.</li>
-            <li>خاطره نباید برای لغت‌های مختلف <b>تکرار شود</b>.</li>
-        </ul>
-        <p><b>روند زمان‌بندی:</b></p>
-        <ul>
-            <li>برای یادآوری هر کلمه حداکثر <b>۳۰ ثانیه</b> فرصت دارید.</li>
-            <li>به محض اینکه خاطره‌ای به ذهنتان آمد، سریعاً روی دکمه <b>«خاطره به ذهنم آمد / شروع تایپ»</b> کلیک کنید.</li>
-            <li>اگر در مدت ۳۰ ثانیه خاطره‌ای به یاد نیاوردید، سیستم به‌طور خودکار کلمه بعدی را نمایش می‌دهد.</li>
-            <li>پس از کلیک روی دکمه، کلمه مخفی شده و <b>۶۰ ثانیه</b> فرصت تایپ خواهید داشت.</li>
-        </ul>
-        <div class="example-card">
-            <b>مثال:</b> کلمه <b>«معلم»</b> را مشاهده می‌کنید. به محض یادآوری دکمه را می‌زنید و خاطره خاص خود را تایپ می‌کنید:<br>
-            <i>«سال گذشته روز معلم، معلممان از هدیه‌ای که من به او دادم خیلی خوشش آمد و من را بوسید.»</i>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # ترکیب داده‌های قبلی و جدید
+    df_updated = pd.concat([df_existing, df_new_row], ignore_index=True)
+    
+    # بروزرسانی گوگل شیت
+    conn.update(worksheet="AMT_Data", data=df_updated)
 
-    subject_input = st.text_input("لطفاً کد / شناسه شرکت‌کننده را وارد کنید:")
+# ۴. مدیریت حالت‌های برنامه‌ (Session State)
+TIME_LIMIT = 60  # مهلت زمانی برحسب ثانیه
 
-    if st.button("شروع آزمون"):
-        if not subject_input.strip():
-            st.error("لطفاً ابتدا شناسه شرکت‌کننده را وارد کنید.")
+if "start_time" not in st.session_state:
+    st.session_state.start_time = time.time()
+
+if "is_submitted" not in st.session_state:
+    st.session_state.is_submitted = False
+
+# کد شرکت‌کننده
+participant_id = st.text_input("کد شرکت‌کننده / نام:", value="ناشناس")
+
+st.markdown("---")
+st.subheader("کلمه محرک: **خوشحالی**")
+
+# ۵. محاسبه زمان
+elapsed_time = time.time() - st.session_state.start_time
+remaining_time = max(0, int(TIME_LIMIT - elapsed_time))
+
+# ۶. جریان اصلی برنامه
+if not st.session_state.is_submitted:
+    # نمایش تایمر
+    st.metric(label="⏱️ زمان باقی‌مانده (ثانیه)", value=remaining_time)
+    
+    # ورودی متن
+    user_response = st.text_area(
+        "خاطره خود را وارد کنید:", 
+        key="amt_text_input",
+        height=150,
+        disabled=(remaining_time == 0)
+    )
+
+    submit_btn = st.button("ثبت پاسخ", type="primary")
+
+    # شرط ثبت: رسیدن زمان به صفر یا کلیک روی دکمه ثبت
+    if remaining_time == 0 or submit_btn:
+        st.session_state.is_submitted = True
+        
+        # برداشت متن تایپ‌شده تا این لحظه
+        final_text = st.session_state.get("amt_text_input", "").strip()
+        
+        # ثبت رکورد
+        record = {
+            "participant_id": participant_id,
+            "response": final_text if final_text else "[بدون پاسخ]",
+            "time_taken_sec": round(elapsed_time, 2),
+            "submission_type": "خودکار (پایان زمان)" if remaining_time == 0 else "دستی (دکمه ثبت)",
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        # ذخیره در گوگل شیت
+        with st.spinner("در حال ثبت اطلاعات..."):
+            save_amt_gsheet(record)
+            
+        if remaining_time == 0:
+            st.warning("⏰ زمان ۶۰ ثانیه به پایان رسید! تمامی متونی که تا این لحظه تایپ کرده بودید ذخیره شد.")
         else:
-            st.session_state.subject_id = subject_input.strip()
-            st.session_state.page = 'amt_task'
-            st.session_state.phase = 'viewing'
-            st.session_state.phase_start_time = time.time()
-            st.rerun()
+            st.success("✅ پاسخ شما با موفقیت ثبت شد.")
+            
+        st.rerun()
 
-# -------------------------------------------------------------------
-# بخش ۲: اجرای آزمون
-# -------------------------------------------------------------------
-elif st.session_state.page == 'amt_task':
-    words = st.session_state.amt_words
-    current_idx = st.session_state.word_index
-    total_words = len(words)
-
-    if current_idx < total_words:
-        category, word = words[current_idx]
-        st.caption(f"کلمه {current_idx + 1} از {total_words}")
-        elapsed = time.time() - st.session_state.phase_start_time
-
-        # فاز ۱: مشاهده کلمه
-        if st.session_state.phase == 'viewing':
-            if elapsed < MAX_VIEW_TIME:
-                rem_view = int(MAX_VIEW_TIME - elapsed)
-                st.markdown(f'<div class="word-box">{word}</div>', unsafe_allow_html=True)
-                st.info(f"👀 **فرصت یادآوری:** {rem_view} ثانیه باقی‌مانده است...")
-                
-                if st.button("💡 خاطره به ذهنم آمد / شروع تایپ", use_container_width=True):
-                    st.session_state.view_duration = round(elapsed, 2)
-                    st.session_state.phase = 'typing'
-                    st.session_state.phase_start_time = time.time()
-                    st.rerun()
-            else:
-                record = {
-                    "Subject_ID": st.session_state.subject_id,
-                    "Word_Index": current_idx + 1,
-                    "Word": word,
-                    "Category": category,
-                    "Response_Text": "بدون پاسخ (عدم یادآوری در ۳۰ ثانیه)",
-                    "Retrieval_Latency_Sec": MAX_VIEW_TIME,
-                    "Typing_Duration_Sec": 0,
-                    "Total_Time_Sec": MAX_VIEW_TIME,
-                    "Time_Out": True
-                }
-                save_amt_gsheet(record)
-                st.session_state.word_index += 1
-                st.session_state.phase = 'viewing'
-                st.session_state.phase_start_time = time.time()
-                st.rerun()
-
-        # فاز ۲: تایپ خاطره
-        elif st.session_state.phase == 'typing':
-            if elapsed < TYPE_TIME:
-                rem_type = int(TYPE_TIME - elapsed)
-                st.markdown('<div class="hidden-word-box">🙈 کلمه ناپدید شد! خاطره خود را تایپ کنید.</div>', unsafe_allow_html=True)
-                st.warning(f"✍️ **زمان باقی‌مانده جهت تایپ خاطره:** {rem_type} ثانیه")
-
-                with st.form(key=f"amt_form_{current_idx}"):
-                    memory_text = st.text_area("خاطره خود را تایپ کنید:", height=140)
-                    btn_submit = st.form_submit_button("ثبت و کلمه بعدی", use_container_width=True)
-
-                    if btn_submit:
-                        typing_time = round(time.time() - st.session_state.phase_start_time, 2)
-                        record = {
-                            "Subject_ID": st.session_state.subject_id,
-                            "Word_Index": current_idx + 1,
-                            "Word": word,
-                            "Category": category,
-                            "Response_Text": memory_text.strip() if memory_text.strip() else "خالی",
-                            "Retrieval_Latency_Sec": st.session_state.view_duration,
-                            "Typing_Duration_Sec": typing_time,
-                            "Total_Time_Sec": round(st.session_state.view_duration + typing_time, 2),
-                            "Time_Out": False
-                        }
-                        save_amt_gsheet(record)
-                        st.session_state.word_index += 1
-                        st.session_state.phase = 'viewing'
-                        st.session_state.phase_start_time = time.time()
-                        st.rerun()
-            else:
-                record = {
-                    "Subject_ID": st.session_state.subject_id,
-                    "Word_Index": current_idx + 1,
-                    "Word": word,
-                    "Category": category,
-                    "Response_Text": "نیمه‌کاره (اتمام ۶۰ ثانیه تایپ)",
-                    "Retrieval_Latency_Sec": st.session_state.view_duration,
-                    "Typing_Duration_Sec": TYPE_TIME,
-                    "Total_Time_Sec": round(st.session_state.view_duration + TYPE_TIME, 2),
-                    "Time_Out": True
-                }
-                save_amt_gsheet(record)
-                st.session_state.word_index += 1
-                st.session_state.phase = 'viewing'
-                st.session_state.phase_start_time = time.time()
-                st.rerun()
-
+    # رفرش خودکار صفحه هر ۱ ثانیه برای شمارش معکوس
+    if remaining_time > 0 and not submit_btn:
         time.sleep(1)
         st.rerun()
 
-    else:
-        st.session_state.page = 'thank_you'
+else:
+    st.info("پاسخ این مرحله ثبت شده است. با تشکر از همکاری شما!")
+    if st.button("شروع مجدد / کلمه بعدی"):
+        st.session_state.start_time = time.time()
+        st.session_state.is_submitted = False
         st.rerun()
-
-# -------------------------------------------------------------------
-# بخش ۳: پایان آزمون
-# -------------------------------------------------------------------
-elif st.session_state.page == 'thank_you':
-    st.header("پایان آزمون")
-    st.balloons()
-    st.success("پاسخ‌ها و زمان‌های ثبت خاطرات شما با موفقیت در گوگل شیت ذخیره شد.")
